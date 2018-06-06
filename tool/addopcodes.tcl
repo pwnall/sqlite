@@ -10,10 +10,11 @@ set in [open [lindex $argv 0] rb]
 set max 0
 while {![eof $in]} {
   set line [gets $in]
-  if {[regexp {^#define TK_} $line]} {
+  if {[regexp {^#define TK_([A-Z_]+) +(\d+)} $line all nm x]} {
     puts $line
-    set x [lindex $line 2]
     if {$x>$max} {set max $x}
+    set tk($nm) $x
+    set rtk($x) $nm
   }
 }
 close $in
@@ -49,6 +50,8 @@ if {[lrange $extras end-1 end]!="SPACE ILLEGAL"} {
 foreach x $extras {
   incr max
   puts [format "#define TK_%-29s %4d" $x $max]
+  set tk($x) $max
+  set rtk($max) $x
 }
 
 # Some additional #defines related to token codes.
@@ -62,3 +65,55 @@ foreach {fg val comment} {
 } {
   puts [format "#define %-20s %-6s %s" $fg $val $comment]
 }
+
+# Opcodes of significance to resolveExprStep()
+#
+set resolveOps {
+  ROW
+  ID
+  DOT
+  FUNCTION
+  SELECT
+  EXISTS
+  VARIABLE
+  IS
+  ISNOT
+  IN
+  BETWEEN
+  EQ
+  NE
+  LT
+  LE
+  GT
+  GE
+}
+
+puts "\n"
+puts {/* Symbols used by resolveExprStep() */}
+
+set i 0
+foreach x $resolveOps {
+  puts [format "#define %-20s %3d" RESOLVE_$x $i]
+  set rmap($x) $i
+  incr i
+}
+set rmax $i
+puts [format "#define %-20s %3d" RESOLVE_Max [expr {$rmax-1}]]
+puts "#define RESOLVE_MAP \173\\"
+set col 0
+set sep \173
+set rtk(0) noop
+for {set i 0} {$i<=$max} {incr i} {
+  if {$col>70} {
+    puts "\\"
+    set col 0
+  }
+  set nm $rtk($i)
+  if {[info exists rmap($nm)]} {
+    puts -nonewline " $rmap($nm),"
+  } else {
+    puts -nonewline " $rmax,"
+  }
+  incr col 4
+}
+puts " $rmax \175"

@@ -602,7 +602,8 @@ static int exprProbability(Expr *p){
 ** function names.  The operator for aggregate functions is changed
 ** to TK_AGG_FUNCTION.
 */
-static int resolveExprStep(Walker *pWalker, Expr *pExpr){
+static int resolveExprStep(Walker *pWalker, Expr *pExpr);
+static SQLITE_NOINLINE int resolveExprStepEx(Walker *pWalker,Expr *pExpr,u8 op){
   NameContext *pNC;
   Parse *pParse;
 
@@ -620,14 +621,14 @@ static int resolveExprStep(Walker *pWalker, Expr *pExpr){
     }
   }
 #endif
-  switch( pExpr->op ){
+  switch( op ){
 
 #if defined(SQLITE_ENABLE_UPDATE_DELETE_LIMIT) && !defined(SQLITE_OMIT_SUBQUERY)
     /* The special operator TK_ROW means use the rowid for the first
     ** column in the FROM clause.  This is used by the LIMIT and ORDER BY
     ** clause processing on UPDATE and DELETE statements.
     */
-    case TK_ROW: {
+    case RESOLVE_ROW: {
       SrcList *pSrcList = pNC->pSrcList;
       struct SrcList_item *pItem;
       assert( pSrcList && pSrcList->nSrc==1 );
@@ -651,8 +652,8 @@ static int resolveExprStep(Walker *pWalker, Expr *pExpr){
     ** be one call to lookupName().  Then the compiler will in-line 
     ** lookupName() for a size reduction and performance increase.
     */
-    case TK_ID:
-    case TK_DOT: {
+    case RESOLVE_ID:
+    case RESOLVE_DOT: {
       const char *zColumn;
       const char *zTable;
       const char *zDb;
@@ -681,7 +682,7 @@ static int resolveExprStep(Walker *pWalker, Expr *pExpr){
 
     /* Resolve function names
     */
-    case TK_FUNCTION: {
+    case RESOLVE_FUNCTION: {
       ExprList *pList = pExpr->x.pList;    /* The argument list */
       int n = pList ? pList->nExpr : 0;    /* Number of arguments */
       int no_such_func = 0;       /* True if no such function exists */
@@ -797,10 +798,10 @@ static int resolveExprStep(Walker *pWalker, Expr *pExpr){
       return WRC_Prune;
     }
 #ifndef SQLITE_OMIT_SUBQUERY
-    case TK_SELECT:
-    case TK_EXISTS:  testcase( pExpr->op==TK_EXISTS );
+    case RESOLVE_SELECT:
+    case RESOLVE_EXISTS:  testcase( pExpr->op==TK_EXISTS );
 #endif
-    case TK_IN: {
+    case RESOLVE_IN: {
       testcase( pExpr->op==TK_IN );
       if( ExprHasProperty(pExpr, EP_xIsSelect) ){
         int nRef = pNC->nRef;
@@ -814,12 +815,12 @@ static int resolveExprStep(Walker *pWalker, Expr *pExpr){
       }
       break;
     }
-    case TK_VARIABLE: {
+    case RESOLVE_VARIABLE: {
       notValid(pParse, pNC, "parameters", NC_IsCheck|NC_PartIdx|NC_IdxExpr);
       break;
     }
-    case TK_IS:
-    case TK_ISNOT: {
+    case RESOLVE_IS:
+    case RESOLVE_ISNOT: {
       Expr *pRight;
       assert( !ExprHasProperty(pExpr, EP_Reduced) );
       /* Handle special cases of "x IS TRUE", "x IS FALSE", "x IS NOT TRUE",
@@ -835,13 +836,13 @@ static int resolveExprStep(Walker *pWalker, Expr *pExpr){
       }
       /* Fall thru */
     }
-    case TK_BETWEEN:
-    case TK_EQ:
-    case TK_NE:
-    case TK_LT:
-    case TK_LE:
-    case TK_GT:
-    case TK_GE: {
+    case RESOLVE_BETWEEN:
+    case RESOLVE_EQ:
+    case RESOLVE_NE:
+    case RESOLVE_LT:
+    case RESOLVE_LE:
+    case RESOLVE_GT:
+    case RESOLVE_GE: {
       int nLeft, nRight;
       if( pParse->db->mallocFailed ) break;
       assert( pExpr->pLeft!=0 );
@@ -872,6 +873,12 @@ static int resolveExprStep(Walker *pWalker, Expr *pExpr){
   }
   return (pParse->nErr || pParse->db->mallocFailed) ? WRC_Abort : WRC_Continue;
 }
+static int resolveExprStep(Walker *pWalker, Expr *pExpr){
+  static const u8 resolveMap[] = RESOLVE_MAP;
+  u8 op = resolveMap[pExpr->op];
+  return op>RESOLVE_Max ? WRC_Continue : resolveExprStepEx(pWalker,pExpr,op);
+}
+
 
 /*
 ** pEList is a list of expressions which are really the result set of the
