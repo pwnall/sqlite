@@ -1,0 +1,162 @@
+# Build matrix / environment variables are explained on:
+# http://about.travis-ci.org/docs/user/build-configuration/
+# This file can be validated on: http://lint.travis-ci.org/
+
+language: c
+dist: xenial
+osx_image: xcode10.2
+
+compiler:
+- gcc
+- clang
+os:
+- linux
+- osx
+
+env:
+# Default configuration. No explicit options.
+- NAME=Default
+  FEATURE_CONFIG=""
+  FEATURE_DEFINES=""
+# The list of recommended compile-time options from the SQLite documentation.
+# https://www.sqlite.org/compile.html#recommended_compile_time_options
+- NAME=Recommended
+  FEATURE_CONFIG="--enable-tcl --disable-threadsafe"
+  FEATURE_DEFINES="
+    -DSQLITE_DEFAULT_MEMSTATUS=0
+    -DSQLITE_DEFAULT_WAL_SYNCHRONOUS=1
+    -DSQLITE_LIKE_DOESNT_MATCH_BLOBS
+    -DSQLITE_MAX_EXPR_DEPTH=0
+    -DSQLITE_OMIT_DECLTYPE
+    -DSQLITE_OMIT_DEPRECATED
+    -DSQLITE_OMIT_PROGRESS_CALLBACK
+    -DSQLITE_OMIT_SHARED_CACHE
+    -DSQLITE_THREADSAFE=0
+    -DSQLITE_USE_ALLOCA"
+# Maximum coverage. All extensions enabled, debugging assertions turned on.
+- NAME=Debug
+  FEATURE_CONFIG="--enable-tcl --enable-threadsafe"
+  FEATURE_DEFINES="
+    -DSQLITE_DEBUG
+    -DSQLITE_MEMDEBUG
+    -DSQLITE_ENABLE_ATOMIC_WRITE
+    -DSQLITE_ENABLE_BATCH_ATOMIC_WRITE
+    -DSQLITE_ENABLE_COLUMN_METADATA
+    -DSQLITE_ENABLE_DBPAGE_VTAB
+    -DSQLITE_ENABLE_DBSTAT_VTAB
+    -DSQLITE_ENABLE_DESERIALIZE
+    -DSQLITE_ENABLE_EXPLAIN_COMMENTS
+    -DSQLITE_ENABLE_FTS3
+    -DSQLITE_ENABLE_FTS3_PARENTHESIS
+    -DSQLITE_ENABLE_FTS3_TOKENIZER
+    -DSQLITE_ENABLE_FTS4
+    -DSQLITE_ENABLE_FTS5
+    -DSQLITE_ENABLE_GEOPOLY
+    -DSQLITE_ENABLE_JSON1
+    -DSQLITE_ENABLE_ICU
+    -DSQLITE_ENABLE_MEMORY_MANAGEMENT
+    -DSQLITE_ENABLE_RBU
+    -DSQLITE_ENABLE_RTREE
+    -DSQLITE_ENABLE_SESSION
+    -DSQLITE_ENABLE_SNAPSHOT
+    -DSQLITE_ENABLE_STMT_SCANSTATUS
+    -DSQLITE_ENABLE_STMTVTAB
+    -DSQLITE_ENABLE_STAT4
+    -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT
+    -DSQLITE_INTROSPECTION_PRAGMAS
+    -DSQLITE_THREADSAFE=1
+    -DSQLITE_USE_ALLOCA"
+# Chromium's configuration.
+- NAME=Chromium
+  FEATURE_CONFIG="--enable-tcl --enable-threadsafe"
+  FEATURE_DEFINES="
+    -DSQLITE_DEFAULT_FILE_PERMISSIONS=0600
+    -DSQLITE_DEFAULT_LOOKASIDE=0,0
+    -DSQLITE_DEFAULT_MEMSTATUS=1
+    -DSQLITE_DEFAULT_PAGE_SIZE=4096
+    -DSQLITE_DEFAULT_PCACHE_INITSZ=0
+    -DSQLITE_DISABLE_FTS3_UNICODE
+    -DSQLITE_DISABLE_FTS4_DEFERRED
+    -DSQLITE_ENABLE_BATCH_ATOMIC_WRITE
+    -DSQLITE_ENABLE_FTS3
+    -DSQLITE_ENABLE_ICU
+    -DSQLITE_HAVE_ISNAN
+    -DSQLITE_LIKE_DOESNT_MATCH_BLOBS
+    -DSQLITE_MAX_MMAP_SIZE=268435456
+    -DSQLITE_MAX_WORKER_THREADS=0
+    -DSQLITE_OMIT_ANALYZE
+    -DSQLITE_OMIT_AUTOINIT
+    -DSQLITE_OMIT_AUTORESET
+    -DSQLITE_OMIT_COMPILEOPTION_DIAGS
+    -DSQLITE_OMIT_COMPLETE
+    -DSQLITE_OMIT_DECLTYPE
+    -DSQLITE_OMIT_DEPRECATED
+    -DSQLITE_OMIT_EXPLAIN
+    -DSQLITE_OMIT_GET_TABLE
+    -DSQLITE_OMIT_LOAD_EXTENSION
+    -DSQLITE_OMIT_LOOKASIDE
+    -DSQLITE_OMIT_PROGRESS_CALLBACK
+    -DSQLITE_OMIT_REINDEX
+    -DSQLITE_OMIT_SHARED_CACHE
+    -DSQLITE_OMIT_TRACE
+    -DSQLITE_OMIT_UPSERT
+    -DSQLITE_OMIT_WINDOWFUNC
+    -DSQLITE_SECURE_DELETE
+    -DSQLITE_TEMP_STORE=3
+    -DSQLITE_USE_ALLOCA"
+
+addons:
+  apt:
+    sources:
+    - ubuntu-toolchain-r-test
+    - llvm-toolchain-xenial-8
+    packages:
+    - clang-8
+    - gcc-9
+    - libicu-dev
+    - tcl8.6-dev
+  homebrew:
+    packages:
+    - gcc@9
+    - icu4c
+    - llvm@8
+    - tcl-tk
+    update: true
+
+install:
+# The following Homebrew packages aren't linked by default, and need to be
+# prepended to the path explicitly.
+- if [ "$TRAVIS_OS_NAME" == "osx" ]; then
+    export PATH="$(brew --prefix icu4c)/bin:$PATH";
+    export PATH="$(brew --prefix llvm)/bin:$PATH";
+    export PATH="$(brew --prefix tcl-tk)/bin:$PATH";
+  fi
+# macOS compilers installed from Homebrew need help finding system headers.
+# The system headers need to be preceded by the current directory in the include
+# path, otherwise #include "sqlite.h" resolves to the header in the macOS SDK.
+- if [ "$TRAVIS_OS_NAME" == "osx" ]; then
+    export CFLAGS="-I. -I$(xcrun --show-sdk-path)/usr/include";
+  fi
+# /usr/bin/gcc points to an older compiler on both Linux and macOS.
+- if [ "$CC" = "gcc" ]; then export CC="gcc-9"; fi
+# /usr/bin/clang points to an older compiler on both Linux and macOS.
+- if [ "$CC" = "clang" ]; then export CC="clang-8"; fi
+- echo ${CC}
+- ${CC} --version
+
+before_script:
+- mkdir -p build && cd build
+# -w silences compiler warnigns, to reduce the output log size.
+- ../configure CFLAGS="-w $CFLAGS $FEATURE_DEFINES $(icu-config --cppflags)"
+    LDFLAGS="$(icu-config --ldflags) -lm" $FEATURE_CONFIG --enable-amalgamation
+
+script:
+# Tested targets:
+# - fulltest: runs for longer than the Travis CI limit of 50 minutes
+# - fulltestonly: exceeds the Travis CI log limit
+# - test: passes
+# Untested targets:
+# - tcltest: subset of test, which passes
+# - quicktest: subset of test, which passes
+# - soaktest: longer than fulltest, which exceeds the time limit
+- make test
