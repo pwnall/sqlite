@@ -1,0 +1,146 @@
+version: 2.1
+commands:
+  test_sqlite:
+      description: Configure the SQLite build
+      parameters:
+        compiler:
+          type: string
+          default: clang-8
+        defines:
+          type: string
+          default: ""
+        build_args:
+          type: string
+          default: ""
+        test_type:
+          type: string
+          default: test
+      steps:
+      - checkout
+      - run:
+          name: Configure the build
+          command: >-
+            mkdir build &&
+            cd build &&
+            CC=<< parameters.compiler >> ../configure
+            CFLAGS="-w $(pkg-config --cflags icu-uc icu-i18n)
+            << parameters.defines >>"
+            LDFLAGS="$(pkg-config --libs icu-uc icu-i18n) -lm"
+            --enable-amalgamation << parameters.build_args >>
+      - run:
+          name: Test
+          command: cd build && make << parameters.test_type >>
+
+jobs:
+  test_gcc_default:
+    docker:
+    - image: pwnall/sqlite-test:latest
+    steps:
+    - test_sqlite:
+        compiler: gcc-9
+        test_type: fulltest
+
+  test_clang_default:
+    docker:
+    - image: pwnall/sqlite-test:latest
+    steps:
+    - checkout
+    - test_sqlite:
+        compiler: clang-8
+        test_type: fulltest
+
+  test_gcc_chromium:
+    docker:
+    - image: pwnall/sqlite-test:latest
+    steps:
+    - checkout
+    - test_sqlite:
+        compiler: gcc-9
+        test_type: fulltest
+        build_args: "--enable-tcl --enable-threadsafe"
+        defines: >-
+          -DSQLITE_DEFAULT_FILE_PERMISSIONS=0600
+          -DSQLITE_DEFAULT_LOOKASIDE=0,0
+          -DSQLITE_DEFAULT_MEMSTATUS=1
+          -DSQLITE_DEFAULT_PAGE_SIZE=4096
+          -DSQLITE_DEFAULT_PCACHE_INITSZ=0
+          -DSQLITE_DISABLE_FTS3_UNICODE
+          -DSQLITE_DISABLE_FTS4_DEFERRED
+          -DSQLITE_ENABLE_FTS3
+          -DSQLITE_ENABLE_ICU
+          -DSQLITE_HAVE_ISNAN
+          -DSQLITE_LIKE_DOESNT_MATCH_BLOBS
+          -DSQLITE_MAX_MMAP_SIZE=268435456
+          -DSQLITE_MAX_WORKER_THREADS=0
+          -DSQLITE_OMIT_ANALYZE
+          -DSQLITE_OMIT_AUTOINIT
+          -DSQLITE_OMIT_AUTORESET
+          -DSQLITE_OMIT_COMPILEOPTION_DIAGS
+          -DSQLITE_OMIT_COMPLETE
+          -DSQLITE_OMIT_DECLTYPE
+          -DSQLITE_OMIT_DEPRECATED
+          -DSQLITE_OMIT_EXPLAIN
+          -DSQLITE_OMIT_GET_TABLE
+          -DSQLITE_OMIT_LOAD_EXTENSION
+          -DSQLITE_OMIT_LOOKASIDE
+          -DSQLITE_OMIT_PROGRESS_CALLBACK
+          -DSQLITE_OMIT_REINDEX
+          -DSQLITE_OMIT_SHARED_CACHE
+          -DSQLITE_OMIT_TRACE
+          -DSQLITE_OMIT_UPSERT
+          -DSQLITE_OMIT_WINDOWFUNC
+          -DSQLITE_SECURE_DELETE
+          -DSQLITE_TEMP_STORE=3
+          -DSQLITE_USE_ALLOCA
+
+  test_clang_chromium:
+    docker:
+    - image: pwnall/sqlite-test:latest
+    steps:
+    - checkout
+    - test_sqlite:
+        compiler: clang-8
+        test_type: fulltest
+        build_args: "--enable-tcl --enable-threadsafe"
+        defines: >-
+          -DSQLITE_DEFAULT_FILE_PERMISSIONS=0600
+          -DSQLITE_DEFAULT_LOOKASIDE=0,0
+          -DSQLITE_DEFAULT_MEMSTATUS=1
+          -DSQLITE_DEFAULT_PAGE_SIZE=4096
+          -DSQLITE_DEFAULT_PCACHE_INITSZ=0
+          -DSQLITE_DISABLE_FTS3_UNICODE
+          -DSQLITE_DISABLE_FTS4_DEFERRED
+          -DSQLITE_ENABLE_FTS3
+          -DSQLITE_ENABLE_ICU
+          -DSQLITE_HAVE_ISNAN
+          -DSQLITE_LIKE_DOESNT_MATCH_BLOBS
+          -DSQLITE_MAX_MMAP_SIZE=268435456
+          -DSQLITE_MAX_WORKER_THREADS=0
+          -DSQLITE_OMIT_ANALYZE
+          -DSQLITE_OMIT_AUTOINIT
+          -DSQLITE_OMIT_AUTORESET
+          -DSQLITE_OMIT_COMPILEOPTION_DIAGS
+          -DSQLITE_OMIT_COMPLETE
+          -DSQLITE_OMIT_DECLTYPE
+          -DSQLITE_OMIT_DEPRECATED
+          -DSQLITE_OMIT_EXPLAIN
+          -DSQLITE_OMIT_GET_TABLE
+          -DSQLITE_OMIT_LOAD_EXTENSION
+          -DSQLITE_OMIT_LOOKASIDE
+          -DSQLITE_OMIT_PROGRESS_CALLBACK
+          -DSQLITE_OMIT_REINDEX
+          -DSQLITE_OMIT_SHARED_CACHE
+          -DSQLITE_OMIT_TRACE
+          -DSQLITE_OMIT_UPSERT
+          -DSQLITE_OMIT_WINDOWFUNC
+          -DSQLITE_SECURE_DELETE
+          -DSQLITE_TEMP_STORE=3
+          -DSQLITE_USE_ALLOCA
+
+workflows:
+  version: 2
+  test:
+    jobs:
+      - test_gcc_default
+      - test_clang_default
+      - test_clang_chromium
